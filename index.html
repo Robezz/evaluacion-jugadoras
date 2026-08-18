@@ -164,7 +164,7 @@ const SUPABASE_ANON = "sb_publishable_cNbBJ7D8tszAkI6EY9Jvqw_jkJckNBk";
 const NOMBRE_CLUB   = "Celta Baloncesto";
 // ---------------------------------------------------------------------
 
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/+esm";
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 const app = document.getElementById("app");
@@ -227,7 +227,7 @@ function vistaLogin() {
       password: document.getElementById("pw").value
     });
     b.disabled = false;
-    if (error) return fallo(new Error("correo o contraseña incorrectos."));
+    if (error) return fallo(error);
     arrancar();
   };
   document.getElementById("entrar").onclick = entrar;
