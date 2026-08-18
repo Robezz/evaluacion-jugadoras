@@ -227,7 +227,12 @@ function vistaLogin() {
       password: document.getElementById("pw").value
     });
     b.disabled = false;
-    if (error) return fallo(error);
+    if (error) {
+      const m = (error.message || "").toLowerCase();
+      if (m.includes("invalid login")) return fallo(new Error("correo o contraseña incorrectos."));
+      if (m.includes("not confirmed")) return fallo(new Error("este usuario está sin confirmar. Actívalo en Supabase."));
+      return fallo(error);
+    }
     arrancar();
   };
   document.getElementById("entrar").onclick = entrar;
@@ -270,13 +275,25 @@ async function vistaEquipos() {
       ${data?.length ? `<ul class="lista" style="margin-top:10px">${filas}</ul>`
         : `<div class="vacio">Todavía no tienes ningún equipo asignado.</div>`}
     </div>
-    ${esAdmin() ? `<div class="fila-btn"><button class="btn suave" id="admin">Administración del club</button></div>` : ""}
+    <div class="fila-btn">
+      ${esAdmin() ? `<button class="btn suave" id="admin">Administración del club</button>` : ""}
+      <button class="btn suave" id="clave">Cambiar mi contraseña</button>
+    </div>
   `, NOMBRE_CLUB + " · equipos");
 
   app.querySelectorAll("[data-eq]").forEach(b =>
     b.onclick = () => vistaJugadoras(+b.dataset.eq, b.dataset.nom));
   const a = document.getElementById("admin");
   if (a) a.onclick = vistaAdmin;
+
+  document.getElementById("clave").onclick = async () => {
+    const nueva = prompt("Escribe tu nueva contraseña (mínimo 6 caracteres)");
+    if (nueva === null) return;
+    if (nueva.trim().length < 6) return fallo(new Error("la contraseña es demasiado corta."));
+    const { error } = await sb.auth.updateUser({ password: nueva.trim() });
+    if (error) return fallo(error);
+    alert("Contraseña cambiada. La próxima vez entra con la nueva.");
+  };
 }
 
 // ----------------------------- jugadoras -----------------------------
@@ -599,10 +616,14 @@ async function vistaAdmin() {
       <h3>Entrenadores</h3>
       <p class="aviso">Las altas de usuario se hacen en Supabase, en Authentication → Users → Invite.
         Aquí se les asigna equipo y rol.</p>
-       <ul class="lista" style="margin:10px 0">${(gente || []).map(g =>
-        `<li><div style="display:flex;gap:8px;align-items:center;padding:8px 0">
-          <input data-nom="${g.id}" value="${esc(g.nombre)}">
-          <span class="meta">${esc(g.rol)}</span>
+      <ul class="lista" style="margin:10px 0">${(gente || []).map(g =>
+        `<li><div style="display:flex;gap:8px;align-items:center;padding:9px 0;flex-wrap:wrap">
+          <input data-nom="${g.id}" value="${esc(g.nombre)}" style="flex:1;min-width:150px">
+          <select data-rol="${g.id}" style="flex:0 0 auto;width:auto">
+            <option value="entrenador"${g.rol === "entrenador" ? " selected" : ""}>entrenador</option>
+            <option value="coordinacion"${g.rol === "coordinacion" ? " selected" : ""}>coordinación</option>
+            <option value="admin"${g.rol === "admin" ? " selected" : ""}>admin</option>
+          </select>
           <button class="btn suave" data-guardar="${g.id}" style="flex:0 0 auto">Guardar</button>
         </div></li>`).join("")}</ul>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -612,7 +633,7 @@ async function vistaAdmin() {
       <div class="fila-btn"><button class="btn suave" id="aadd" style="flex:0 0 auto">Asignar al equipo</button></div>
     </div>`, "Administración", vistaEquipos);
 
-   document.getElementById("tadd").onclick = async () => {
+  document.getElementById("tadd").onclick = async () => {
     const nombre = document.getElementById("tn").value.trim();
     if (!nombre) return fallo(new Error("escribe el nombre de la temporada."));
     const { error } = await sb.from("temporadas").insert({ nombre });
@@ -641,8 +662,9 @@ async function vistaAdmin() {
   app.querySelectorAll("[data-guardar]").forEach(b => b.onclick = async () => {
     const id = b.dataset.guardar;
     const nombre = app.querySelector(`[data-nom="${id}"]`).value.trim();
+    const rol = app.querySelector(`[data-rol="${id}"]`).value;
     if (!nombre) return fallo(new Error("el nombre no puede quedar vacío."));
-    const { error } = await sb.from("perfiles").update({ nombre }).eq("id", id);
+    const { error } = await sb.from("perfiles").update({ nombre, rol }).eq("id", id);
     if (error) return fallo(error);
     b.textContent = "Guardado";
     setTimeout(() => { b.textContent = "Guardar"; }, 1500);
