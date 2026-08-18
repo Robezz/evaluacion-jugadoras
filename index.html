@@ -364,45 +364,91 @@ async function vistaJugadoras(eqId, eqNom) {
 async function vistaJugadora(jId, eqId, eqNom) {
   pinta(`<div class="tarjeta vacio">Cargando…</div>`, "Jugadora", () => vistaJugadoras(eqId, eqNom));
   const [{ data: j }, { data: evs, error }] = await Promise.all([
-    sb.from("jugadoras").select("nombre,apellidos,dorsal,anio_nacimiento").eq("id", jId).single(),
-    sb.from("evaluaciones").select("id,fecha,periodo,estado,perfiles(nombre)")
+    sb.from("jugadoras")
+      .select("nombre,apellidos,dorsal,anio_nacimiento,equipos(temporada_id,temporadas(nombre))")
+      .eq("id", jId).single(),
+    sb.from("evaluaciones").select("id,fecha,periodo,estado,temporada_id,temporadas(nombre)")
       .eq("jugadora_id", jId).order("fecha", { ascending: false })
   ]);
   if (error) return fallo(error);
 
+  const tempId  = j?.equipos?.temporada_id ?? null;
+  const tempNom = j?.equipos?.temporadas?.nombre || "";
+
   const nom = `${j?.nombre || ""} ${j?.apellidos || ""}`.trim();
-  const filas = (evs || []).map(e => `
-    <li><button data-ev="${e.id}">
-      <span>${esc(e.periodo || "Evaluación")} · ${fecha(e.fecha)}</span>
-      <span class="meta"><span class="estado ${e.estado}">${e.estado === "cerrada" ? "Cerrada" : "Borrador"}</span></span>
-    </button></li>`).join("");
+
+  const grupos = {};
+  (evs || []).forEach(e => {
+    const k = e.temporadas?.nombre || "Sin temporada";
+    (grupos[k] = grupos[k] || []).push(e);
+  });
+
+  const historial = Object.keys(grupos).sort().reverse().map(k => `
+    <p style="font-family:var(--display);font-weight:600;font-size:15px;
+       margin:16px 0 2px;color:var(--tinta-2)">${esc(k)}</p>
+    <ul class="lista">${grupos[k].map(e => `
+      <li><div style="display:flex;align-items:center;gap:6px">
+        <button data-ev="${e.id}" style="flex:1">
+          <span>${esc(e.periodo || "Evaluación")} · ${fecha(e.fecha)}</span>
+          <span class="meta"><span class="estado ${e.estado}">${e.estado === "cerrada" ? "Cerrada" : "Borrador"}</span></span>
+        </button>
+        ${esAdmin() ? `<button class="btn suave" data-delev="${e.id}"
+          style="flex:0 0 auto;padding:7px 11px">Borrar</button>` : ""}
+      </div></li>`).join("")}</ul>`).join("");
 
   pinta(`
     <div class="tarjeta">
       <h2>${esc(nom)}</h2>
-      <p class="aviso">${esc(eqNom)}${j?.dorsal ? " · dorsal " + j.dorsal : ""}${j?.anio_nacimiento ? " · " + j.anio_nacimiento : ""}</p>
+      <p class="aviso">${esc(eqNom)}${j?.dorsal ? " · dorsal " + j.dorsal : ""}${j?.anio_nacimiento ? " · " + j.anio_nacimiento : ""}${tempNom ? " · temporada " + esc(tempNom) : ""}</p>
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:16px">
         <div style="flex:1;min-width:190px"><label for="per">Periodo</label>
           <select id="per">${PERIODOS.map(p =>
             `<option value="${p.v}">${p.t}</option>`).join("")}</select></div>
         <button class="btn" id="nueva" style="flex:0 0 auto">Nueva evaluación</button>
       </div>
+      <div class="fila-btn">
+        <button class="btn suave" id="baja" style="flex:0 0 auto">Dar de baja</button>
+        ${esAdmin() ? `<button class="btn suave" id="borrar" style="flex:0 0 auto">Borrar definitivamente</button>` : ""}
+      </div>
     </div>
     <div class="tarjeta">
       <h3>Historial</h3>
-      ${evs?.length ? `<ul class="lista" style="margin-top:10px">${filas}</ul>`
+      ${evs?.length ? historial
         : `<div class="vacio">Todavía no hay ninguna evaluación registrada.</div>`}
     </div>`, nom, () => vistaJugadoras(eqId, eqNom));
 
   app.querySelectorAll("[data-ev]").forEach(b =>
     b.onclick = () => vistaInforme(+b.dataset.ev, () => vistaJugadora(jId, eqId, eqNom)));
 
+  app.querySelectorAll("[data-delev]").forEach(b => b.onclick = async () => {
+    if (!confirm("Se borrará esta evaluación y todas sus valoraciones. No se puede deshacer. ¿Continuar?")) return;
+    const { error } = await sb.from("evaluaciones").delete().eq("id", +b.dataset.delev);
+    if (error) return fallo(error);
+    vistaJugadora(jId, eqId, eqNom);
+  });
+
+  document.getElementById("baja").onclick = async () => {
+    if (!confirm(`${nom} dejará de aparecer en el listado del equipo, pero se conservan todas sus evaluaciones. ¿Darla de baja?`)) return;
+    const { error } = await sb.from("jugadoras").update({ activa: false }).eq("id", jId);
+    if (error) return fallo(error);
+    vistaJugadoras(eqId, eqNom);
+  };
+
+  const bo = document.getElementById("borrar");
+  if (bo) bo.onclick = async () => {
+    const n = (evs || []).length;
+    if (!confirm(`Se borrará a ${nom}${n ? ` y sus ${n} evaluaciones` : ""} de forma permanente. No se puede deshacer.\n\nSi solo quiere dejar el equipo, usa «Dar de baja».\n\n¿Borrar definitivamente?`)) return;
+    const { error } = await sb.from("jugadoras").delete().eq("id", jId);
+    if (error) return fallo(error);
+    vistaJugadoras(eqId, eqNom);
+  };
+
   document.getElementById("nueva").onclick = async () => {
     const periodo = document.getElementById("per").value;
     const atras = () => vistaJugadora(jId, eqId, eqNom);
-    const ya = (evs || []).find(x => x.periodo === periodo);
+    const ya = (evs || []).find(x => x.periodo === periodo && x.temporada_id === tempId);
     if (ya) {
-      if (!confirm(`Ya existe una evaluación «${periodo}» de esta jugadora esta temporada. ¿Abrir la que hay?`)) return;
+      if (!confirm(`Ya existe una evaluación «${periodo}» de esta jugadora en la temporada ${tempNom}. ¿Abrir la que hay?`)) return;
       return ya.estado === "cerrada" ? vistaInforme(ya.id, atras) : vistaFicha(ya.id, nom, atras);
     }
     const { data, error } = await sb.from("evaluaciones")
@@ -561,6 +607,7 @@ async function vistaInforme(evId, atras) {
     <div class="fila-btn no-print" style="margin:16px 0 0">
       <button class="btn" id="imprimir" style="flex:0 0 auto">Imprimir o guardar en PDF</button>
       ${e.estado === "borrador" ? `<button class="btn suave" id="seguir" style="flex:0 0 auto">Seguir editando</button>` : ""}
+      ${e.estado === "cerrada" && esAdmin() ? `<button class="btn suave" id="reabrir" style="flex:0 0 auto">Reabrir ficha</button>` : ""}
     </div>
     <div class="informe">
       <div class="cab">
@@ -594,6 +641,15 @@ async function vistaInforme(evId, atras) {
   document.getElementById("imprimir").onclick = () => window.print();
   const s = document.getElementById("seguir");
   if (s) s.onclick = () => vistaFicha(evId, nom, atras);
+
+  const r = document.getElementById("reabrir");
+  if (r) r.onclick = async () => {
+    if (!confirm("La ficha volverá a estado de borrador y su autor podrá editarla de nuevo. ¿Reabrir?")) return;
+    r.disabled = true;
+    const { error } = await sb.from("evaluaciones").update({ estado: "borrador" }).eq("id", evId);
+    if (error) { r.disabled = false; return fallo(error); }
+    vistaFicha(evId, nom, atras);
+  };
 }
 
 // --------------------------- administración --------------------------
