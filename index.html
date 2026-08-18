@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16202B">
+<link rel="icon" href="icono.png">
+<link rel="apple-touch-icon" href="icono.png">
+<meta name="apple-mobile-web-app-title" content="Celta · Evaluación">
 <title>Evaluación de jugadoras</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,6 +14,7 @@
 <style>
 :root{
   --tinta:#16202B;
+  --celeste:#7EA9E1;
   --tinta-2:#4A5765;
   --tinta-3:#8794A3;
   --papel:#EFF1F4;
@@ -46,7 +50,8 @@ input:focus,select,textarea:focus,button:focus-visible{outline:2px solid var(--n
 label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0 0 5px}
 
 .envoltorio{max-width:820px;margin:0 auto;padding:0 16px 48px}
-.barra{background:var(--tinta);color:#fff;position:sticky;top:0;z-index:20}
+.barra{background:var(--tinta);color:#fff;position:sticky;top:0;z-index:20;border-bottom:4px solid var(--celeste)}
+.barra img{height:30px;width:30px;flex:0 0 auto;border-radius:6px}
 .barra .envoltorio{display:flex;align-items:center;gap:12px;padding-top:12px;padding-bottom:12px}
 .barra h1{color:#fff;font-size:19px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .barra button{background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;
@@ -110,6 +115,7 @@ label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0
 
 /* ---- Informe ---- */
 .informe{background:#fff;padding:26px 30px;border:1px solid var(--linea);border-radius:4px;font-size:12px;line-height:1.5}
+.informe .escudo{width:34px;height:34px;flex:0 0 auto;border-radius:4px}
 .informe .cab{display:flex;justify-content:space-between;gap:16px;
   border-bottom:1.5px solid var(--tinta);padding-bottom:9px;flex-wrap:wrap}
 .informe .cab p{margin:0}
@@ -137,6 +143,7 @@ label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0
   .envoltorio{max-width:none;padding:0}
   .informe{border:0;padding:0;font-size:10.5pt}
   .informe .cols{grid-template-columns:1fr 1fr;gap:0 22px}
+  .informe .escudo{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   @page{size:A4;margin:14mm}
 }
 </style>
@@ -145,6 +152,7 @@ label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0
 
 <div class="barra no-print">
   <div class="envoltorio">
+    <img src="icono.png" alt="">
     <h1 id="titulo">Evaluación de jugadoras</h1>
     <button id="atras" hidden>Atrás</button>
     <button id="salir" hidden>Salir</button>
@@ -160,7 +168,7 @@ label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0
 //  de la base de datos las que protegen los datos, no esta clave.
 // ---------------------------------------------------------------------
 const SUPABASE_URL  = "https://qubqlsxkvilyzqjlizsn.supabase.co";
-const SUPABASE_ANON = "sb_publishable_cNbBJ7D8tszAkI6EY9Jvqw_jkJckNBk";
+const SUPABASE_ANON = "PEGA-AQUI-TU-CLAVE-sb_publishable_...";
 const NOMBRE_CLUB   = "Celta Baloncesto";
 // ---------------------------------------------------------------------
 
@@ -178,6 +186,11 @@ const NIVELES = [
   { v: 2, t: "En desarrollo",  c: "var(--n2)" },
   { v: 1, t: "Necesita apoyo", c: "var(--n1)" },
   { v: 0, t: "No observado",   c: null }
+];
+const PERIODOS = [
+  { v: "Inicial",         t: "Inicial · noviembre" },
+  { v: "Media temporada", t: "Media temporada · marzo" },
+  { v: "Final",           t: "Final · junio" }
 ];
 const texto = n => (NIVELES.find(x => x.v === (n ?? 0)) || NIVELES[4]).t;
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
@@ -368,8 +381,11 @@ async function vistaJugadora(jId, eqId, eqNom) {
     <div class="tarjeta">
       <h2>${esc(nom)}</h2>
       <p class="aviso">${esc(eqNom)}${j?.dorsal ? " · dorsal " + j.dorsal : ""}${j?.anio_nacimiento ? " · " + j.anio_nacimiento : ""}</p>
-      <div class="fila-btn">
-        <button class="btn" id="nueva">Nueva evaluación</button>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:16px">
+        <div style="flex:1;min-width:190px"><label for="per">Periodo</label>
+          <select id="per">${PERIODOS.map(p =>
+            `<option value="${p.v}">${p.t}</option>`).join("")}</select></div>
+        <button class="btn" id="nueva" style="flex:0 0 auto">Nueva evaluación</button>
       </div>
     </div>
     <div class="tarjeta">
@@ -382,13 +398,18 @@ async function vistaJugadora(jId, eqId, eqNom) {
     b.onclick = () => vistaInforme(+b.dataset.ev, () => vistaJugadora(jId, eqId, eqNom)));
 
   document.getElementById("nueva").onclick = async () => {
-    const periodo = prompt("Periodo de la evaluación (por ejemplo: Inicial, Mitad, Final)", "Inicial");
-    if (periodo === null) return;
+    const periodo = document.getElementById("per").value;
+    const atras = () => vistaJugadora(jId, eqId, eqNom);
+    const ya = (evs || []).find(x => x.periodo === periodo);
+    if (ya) {
+      if (!confirm(`Ya existe una evaluación «${periodo}» de esta jugadora esta temporada. ¿Abrir la que hay?`)) return;
+      return ya.estado === "cerrada" ? vistaInforme(ya.id, atras) : vistaFicha(ya.id, nom, atras);
+    }
     const { data, error } = await sb.from("evaluaciones")
-      .insert({ jugadora_id: jId, entrenador_id: perfil.id, periodo: periodo.trim() || null })
+      .insert({ jugadora_id: jId, entrenador_id: perfil.id, periodo })
       .select("id").single();
     if (error) return fallo(error);
-    vistaFicha(data.id, nom, () => vistaJugadora(jId, eqId, eqNom));
+    vistaFicha(data.id, nom, atras);
   };
 }
 
@@ -543,9 +564,12 @@ async function vistaInforme(evId, atras) {
     </div>
     <div class="informe">
       <div class="cab">
-        <div>
-          <p class="nom">${esc(nom)}</p>
-          <p>${esc(e.equipo)}${e.dorsal ? " · dorsal " + e.dorsal : ""}${e.anio_nacimiento ? " · nacida en " + e.anio_nacimiento : ""}</p>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <img src="icono.png" alt="" class="escudo">
+          <div>
+            <p class="nom">${esc(nom)}</p>
+            <p>${esc(e.equipo)}${e.dorsal ? " · dorsal " + e.dorsal : ""}${e.anio_nacimiento ? " · nacida en " + e.anio_nacimiento : ""}</p>
+          </div>
         </div>
         <div style="text-align:right">
           <p>Temporada ${esc(e.temporada)}</p>
