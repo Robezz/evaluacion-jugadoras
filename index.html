@@ -112,6 +112,7 @@ label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0
 .campo-ext .pista{font-size:12px;color:var(--tinta-3);line-height:1.35;margin:0 0 8px}
 .campo-ext textarea{background:var(--blanco)}
 .campos > div{margin-bottom:16px}
+.campos .pista{font-size:12px;color:var(--tinta-3);line-height:1.35;margin:0 0 6px}
 .pie-fijo{position:sticky;bottom:0;background:var(--papel);
   border-top:1px solid var(--linea);padding:12px 0;margin-top:8px}
 .pie-fijo .fila-btn{margin-top:0}
@@ -518,8 +519,9 @@ async function vistaFicha(evId, nom, atras) {
         </div>
       </div>`).join("")}`).join("");
 
-  const campo = (id, etq, val) =>
-    `<div><label for="${id}">${etq}</label><textarea id="${id}">${esc(val || "")}</textarea></div>`;
+  const campo = (id, etq, val, pista) =>
+    `<div><label for="${id}">${etq}</label>${pista ? `<p class="pista">${pista}</p>` : ""
+     }<textarea id="${id}">${esc(val || "")}</textarea></div>`;
 
   pinta(`
     <div class="tarjeta">
@@ -535,11 +537,16 @@ async function vistaFicha(evId, nom, atras) {
             competiciones fuera del equipo. Déjalo vacío si no procede.</p>
           <textarea id="f_ce">${esc(ev.competicion_externa || "")}</textarea>
         </div>
-        ${campo("f_dp", "Desarrollo personal", ev.desarrollo_personal)}
-        ${campo("f_en", "Entrenabilidad", ev.entrenabilidad)}
-        ${campo("f_fo", "Fortalezas", ev.fortalezas)}
-        ${campo("f_ob", "Objetivos de mejora", ev.objetivos_mejora)}
-        ${campo("f_no", "Observaciones del entrenador", ev.observaciones)}
+        ${campo("f_dp", "Desarrollo personal y actitud", ev.desarrollo_personal,
+          "Cómo crece dentro del equipo: autonomía, responsabilidad con el material y los horarios, trato con las compañeras, cómo encaja las correcciones. No es el sitio para asuntos familiares, de salud o del ánimo de la jugadora.")}
+        ${campo("f_en", "Entrenabilidad", ev.entrenabilidad,
+          "Cómo aprende: atención en las tareas, capacidad de repetir sin desconectar, si aplica lo que se le corrige.")}
+        ${campo("f_fo", "Fortalezas", ev.fortalezas,
+          "Dos o tres cosas concretas en las que destaca, con ejemplos si puedes.")}
+        ${campo("f_ob", "Objetivos de mejora", ev.objetivos_mejora,
+          "Uno o dos objetivos para los próximos meses, ligados a los indicadores en desarrollo o que necesitan apoyo.")}
+        ${campo("f_no", "Observaciones del entrenador", ev.observaciones,
+          "Contexto que ayude a entender la evaluación: lesiones, incorporación tardía, cambio de posición o cambio de rol.")}
       </div>
     </div>
     <div class="pie-fijo">
@@ -643,7 +650,7 @@ async function vistaInforme(evId, atras) {
       <div class="cols">
         <div>${bloques.slice(0, mitad).map(lista).join("")}</div>
         <div>${bloques.slice(mitad).map(lista).join("")}
-          ${parrafo("Desarrollo personal", e.desarrollo_personal)}
+          ${parrafo("Desarrollo personal y actitud", e.desarrollo_personal)}
           ${parrafo("Entrenabilidad", e.entrenabilidad)}</div>
       </div>
       ${e.competicion_externa ? `<div class="externa">
