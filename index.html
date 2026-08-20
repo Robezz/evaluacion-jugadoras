@@ -91,7 +91,9 @@ label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0
   padding:16px 0 6px;border-bottom:2px solid var(--tinta);margin-bottom:2px}
 .ind{display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:9px 0;border-bottom:1px solid var(--linea)}
-.ind span{font-size:14px;line-height:1.3}
+.ind span{font-size:14px;line-height:1.3;flex:1;min-width:0}
+.ind span em{display:block;font-style:normal;font-size:12px;color:var(--tinta-3);
+  line-height:1.3;margin-top:2px}
 .niveles{display:flex;gap:7px;flex:0 0 auto}
 .niveles button{width:30px;height:30px;padding:0;border-radius:50%;
   border:1.5px solid var(--linea-fuerte);background:transparent}
@@ -104,6 +106,11 @@ label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0
 
 .contador{font-family:var(--display);font-size:15px;font-weight:600;color:#fff;opacity:.85}
 .campos{margin-top:22px}
+.campo-ext{background:var(--papel);border:1px solid var(--linea-fuerte);
+  border-radius:12px;padding:14px;margin-bottom:18px}
+.campo-ext label{margin-bottom:2px}
+.campo-ext .pista{font-size:12px;color:var(--tinta-3);line-height:1.35;margin:0 0 8px}
+.campo-ext textarea{background:var(--blanco)}
 .campos > div{margin-bottom:16px}
 .pie-fijo{position:sticky;bottom:0;background:var(--papel);
   border-top:1px solid var(--linea);padding:12px 0;margin-top:8px}
@@ -130,6 +137,8 @@ label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0
 .informe .sube{color:var(--n3);font-weight:600}
 .informe .baja{color:var(--n1);font-weight:600}
 .informe .texto{margin:0;color:#33404E;white-space:pre-wrap}
+.informe .externa{background:#F1F3F6;border-radius:5px;padding:9px 11px;margin-top:12px}
+.informe .externa .bt{margin-top:0;border-bottom:0;padding-bottom:2px}
 .informe .pie{margin-top:16px;padding-top:6px;border-top:.5px solid var(--linea-fuerte);
   display:flex;justify-content:space-between;gap:12px;font-size:10.5px;color:var(--tinta-3);flex-wrap:wrap}
 
@@ -143,7 +152,8 @@ label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0
   .envoltorio{max-width:none;padding:0}
   .informe{border:0;padding:0;font-size:10.5pt}
   .informe .cols{grid-template-columns:1fr 1fr;gap:0 22px}
-  .informe .escudo{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .informe .escudo,.informe .externa{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .informe .externa{break-inside:avoid}
   @page{size:A4;margin:14mm}
 }
 </style>
@@ -168,7 +178,7 @@ label{display:block;font-size:13px;font-weight:500;color:var(--tinta-2);margin:0
 //  de la base de datos las que protegen los datos, no esta clave.
 // ---------------------------------------------------------------------
 const SUPABASE_URL  = "https://qubqlsxkvilyzqjlizsn.supabase.co";
-const SUPABASE_ANON = "sb_publishable_cNbBJ7D8tszAkI6EY9Jvqw_jkJckNBk";
+const SUPABASE_ANON = "Psb_publishable_cNbBJ7D8tszAkI6EY9Jvqw_jkJckNBk";
 const NOMBRE_CLUB   = "Celta Baloncesto";
 // ---------------------------------------------------------------------
 
@@ -464,13 +474,13 @@ async function vistaJugadora(jId, eqId, eqNom) {
 async function cargarIndicadores() {
   if (indicadores) return indicadores;
   const { data, error } = await sb.from("indicadores")
-    .select("id,nombre,orden,bloques(id,nombre,orden)").eq("activo", true);
+    .select("id,nombre,orden,ayuda,bloques(id,nombre,orden)").eq("activo", true);
   if (error) throw error;
   const mapa = new Map();
   data.forEach(i => {
     const b = i.bloques;
     if (!mapa.has(b.id)) mapa.set(b.id, { nombre: b.nombre, orden: b.orden, items: [] });
-    mapa.get(b.id).items.push({ id: i.id, nombre: i.nombre, orden: i.orden });
+    mapa.get(b.id).items.push({ id: i.id, nombre: i.nombre, orden: i.orden, ayuda: i.ayuda });
   });
   indicadores = [...mapa.values()].sort((a, b) => a.orden - b.orden);
   indicadores.forEach(b => b.items.sort((x, y) => x.orden - y.orden));
@@ -500,7 +510,7 @@ async function vistaFicha(evId, nom, atras) {
     <div class="bloque-tit">${esc(b.nombre)}</div>
     ${b.items.map(i => `
       <div class="ind">
-        <span>${esc(i.nombre)}</span>
+        <span>${esc(i.nombre)}${i.ayuda ? `<em>${esc(i.ayuda)}</em>` : ""}</span>
         <div class="niveles" role="group" aria-label="${esc(i.nombre)}">
           ${NIVELES.map(n => `<button type="button" data-i="${i.id}" data-v="${n.v}"
             aria-label="${n.t}" title="${n.t}"
@@ -519,6 +529,12 @@ async function vistaFicha(evId, nom, atras) {
       <div class="leyenda">${leyenda}</div>
       ${cuerpo}
       <div class="campos">
+        <div class="campo-ext">
+          <label for="f_ce">Desempeño competitivo externo</label>
+          <p class="pista">Selecciones, convocatorias con una categoría superior u otras
+            competiciones fuera del equipo. Déjalo vacío si no procede.</p>
+          <textarea id="f_ce">${esc(ev.competicion_externa || "")}</textarea>
+        </div>
         ${campo("f_dp", "Desarrollo personal", ev.desarrollo_personal)}
         ${campo("f_en", "Entrenabilidad", ev.entrenabilidad)}
         ${campo("f_fo", "Fortalezas", ev.fortalezas)}
@@ -547,6 +563,7 @@ async function vistaFicha(evId, nom, atras) {
     const filas = Object.entries(estado).map(([id, v]) =>
       ({ evaluacion_id: evId, indicador_id: +id, nivel: v > 0 ? v : null }));
     const campos = {
+      competicion_externa: document.getElementById("f_ce").value.trim() || null,
       desarrollo_personal: document.getElementById("f_dp").value.trim() || null,
       entrenabilidad:      document.getElementById("f_en").value.trim() || null,
       fortalezas:          document.getElementById("f_fo").value.trim() || null,
@@ -629,6 +646,9 @@ async function vistaInforme(evId, atras) {
           ${parrafo("Desarrollo personal", e.desarrollo_personal)}
           ${parrafo("Entrenabilidad", e.entrenabilidad)}</div>
       </div>
+      ${e.competicion_externa ? `<div class="externa">
+        <p class="bt">Desempeño competitivo externo</p>
+        <p class="texto">${esc(e.competicion_externa)}</p></div>` : ""}
       ${parrafo("Fortalezas", e.fortalezas)}
       ${parrafo("Objetivos de mejora", e.objetivos_mejora)}
       ${parrafo("Observaciones del entrenador", e.observaciones)}
